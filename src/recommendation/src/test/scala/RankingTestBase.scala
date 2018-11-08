@@ -56,6 +56,7 @@ trait RankingTestBase extends TestBase {
       ("44", "Movie 10", 3)))
     .toDF(userCol, itemCol, ratingCol)
     .dropDuplicates()
+    .cache()
 
   lazy val customerIndex: StringIndexer = new StringIndexer()
     .setInputCol(userCol)
@@ -72,6 +73,12 @@ trait RankingTestBase extends TestBase {
   als.setUserCol(customerIndex.getOutputCol)
     .setItemCol(itemIndex.getOutputCol)
     .setRatingCol(ratingCol)
+
+  val sar = new SAR()
+  sar.setUserCol(customerIndex.getOutputCol)
+    .setItemCol(itemIndex.getOutputCol)
+    .setRatingCol(ratingCol)
+    .setSupportThreshold(2)
 
   lazy val paramGrid: Array[ParamMap] = new ParamGridBuilder()
     .addGrid(als.regParam, Array(1.0))

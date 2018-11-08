@@ -12,6 +12,7 @@ from pyspark.ml.tuning import *
 from pyspark.ml.tuning import *
 from pyspark.sql.types import *
 from pyspark.ml.recommendation import ALS
+from mmlspark.SAR import SAR
 
 
 class RankingSpec(unittest.TestCase):

@@ -1,8 +1,6 @@
 // Copyright (C) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See LICENSE in project root for information.
 
-package org.apache.spark.ml.recommendation
-
 import com.github.fommil.netlib.{BLAS => NetlibBLAS}
 import com.microsoft.ml.spark.Wrappable
 import org.apache.hadoop.fs.Path

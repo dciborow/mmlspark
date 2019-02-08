@@ -51,9 +51,9 @@ trait BaseRecommendationModel extends Params with ALSModelParams with HasPredict
     new ALSModel(uid, rank, userFactors, itemFactors)
   }
 
-  def recommendForAllItems(k: Int): DataFrame = ???
+  def recommendForAllItems(k: Int): DataFrame
 
-  def recommendForAllUsers(k: Int): DataFrame = ???
+  def recommendForAllUsers(k: Int): DataFrame
 
   def recommendForAllItems(rank: Int, userDataFrame: DataFrame, itemDataFrame: DataFrame, k: Int): DataFrame = {
     getALSModel(uid, rank, userDataFrame, itemDataFrame)
@@ -165,4 +165,7 @@ object Constants {
   val item = "item"
   val rating = "rating"
   val recommendations = "recommendations"
+  val featuresCol = "featuresCol"
+  val tagId = "tagId"
+  val relevance = "relevance"
 }

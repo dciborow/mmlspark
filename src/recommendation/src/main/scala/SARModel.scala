@@ -11,8 +11,6 @@ import org.apache.spark.sql.functions.{col, udf}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset}
 
-import scala.collection.mutable.{WrappedArray => MWA}
-
 /** SAR Model
   *
   * @param uid The id of the module
@@ -64,7 +62,7 @@ class SARModel(override val uid: String) extends Model[SARModel]
         .add("rating", FloatType)
     )
 
-    val restoreIndexUDF = udf((items: MWA[Int], ratings: MWA[Float]) => {
+    val restoreIndexUDF = udf((items: Seq[Int], ratings: Seq[Float]) => {
       items
         .zipWithIndex
         .map(p => (itemMap.getOrElse(p._1, "-1"), ratings.toList(p._2)))
@@ -88,14 +86,13 @@ class SARModel(override val uid: String) extends Model[SARModel]
     */
   def recommendForAllUsersNoSeeds(k: Int): DataFrame = {
 
-    val seenItems = udf((items: MWA[Float]) => {
+    val seenItems = udf((items: Seq[Float]) => {
       items.zipWithIndex
-        .filter(p => {
-          p._1 > 0
-        }).map(_._2)
+        .filter(_._1 > 0)
+        .map(_._2)
     })
 
-    val seenItemsCount = udf((items: MWA[Float]) => items.length)
+    val seenItemsCount = udf((items: Seq[Float]) => items.length)
 
     val items = getUserDataFrame
       .select(col(getUserCol), seenItems(col("flatList")) as "seenItems")
@@ -108,7 +105,7 @@ class SARModel(override val uid: String) extends Model[SARModel]
       .max("seenItemsCount")
       .collect()(0).getInt(0)
 
-    val filterScore = udf((items: MWA[Int], ratings: MWA[Float], seenItems: MWA[Int]) => {
+    val filterScore = udf((items: Seq[Int], ratings: Seq[Float], seenItems: Seq[Int]) => {
       items
         .zipWithIndex
         .filter(p => !seenItems.contains(p._1))

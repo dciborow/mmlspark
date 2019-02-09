@@ -39,8 +39,8 @@ trait RecommendationParams extends ALSParams
 
 trait BaseRecommendationModel extends Params with ALSModelParams with HasPredictionCol {
 
-  private val id = Constants.id
-  private val rating = Constants.rating
+  private val id = Constants.idCol
+  private val rating = Constants.ratingCol
   private val ratings = rating + "s"
   private val recommendations = Constants.recommendations
 
@@ -160,12 +160,13 @@ trait hasK extends Params {
 }
 
 object Constants {
-  val id = "id"
-  val user = "user"
-  val item = "item"
-  val rating = "rating"
+  val idCol = "id"
+  val userCol = "user"
+  val itemCol = "item"
+  val ratingCol = "rating"
   val recommendations = "recommendations"
   val featuresCol = "featuresCol"
   val tagId = "tagId"
   val relevance = "relevance"
+  val affinityCol = "affinity"
 }

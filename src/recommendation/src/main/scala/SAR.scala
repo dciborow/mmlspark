@@ -8,10 +8,11 @@ import java.util.{Calendar, Date}
 
 import breeze.linalg.{CSCMatrix => BSM, DenseMatrix => BDM, Matrix => BM}
 import com.github.fommil.netlib.BLAS.{getInstance => blas}
+import com.microsoft.ml.spark.schema.DatasetExtensions
 import org.apache.spark.ml
 import org.apache.spark.ml.feature.{StringIndexer, StringIndexerModel}
 import org.apache.spark.ml.param._
-import org.apache.spark.ml.recommendation.{Constants, RecommendationParams}
+import org.apache.spark.ml.recommendation.{RecommendationParams, Constants => C}
 import org.apache.spark.ml.regression.LinearRegression
 import org.apache.spark.ml.util.{DefaultParamsReadable, DefaultParamsWritable, Identifiable}
 import org.apache.spark.ml.{Estimator, Pipeline}
@@ -22,7 +23,6 @@ import org.apache.spark.sql.functions.{col, collect_list, sum, udf, _}
 import org.apache.spark.sql.types.{IntegerType, StructType, _}
 import org.apache.spark.sql.{DataFrame, Dataset}
 
-import scala.collection.mutable
 import scala.language.existentials
 
 /** SAR
@@ -68,9 +68,9 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
 
   override def fit(dataset: Dataset[_]): SARModel = {
 
-    //Create user and item affinity matricies
+    //Calculate user and item affinity matricies
     val (userItemAffinityMatrix, itemItemAffinityMatrix) =
-      if (getAutoIndex) calculateIndexAffinities(dataset)
+      if (getAutoIndex) calculateIndexAndAffinities(dataset)
       else (calculateUserItemAffinities(dataset), calculateItemItemAffinities(dataset))
 
     new SARModel(uid)
@@ -92,56 +92,55 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
 
   def this() = this(Identifiable.randomUID("SAR"))
 
-  private[spark] def calculateIndexAffinities(dataset: Dataset[_]): (DataFrame, DataFrame) = {
+  private[spark] def calculateIndexAndAffinities(dataset: Dataset[_]): (DataFrame, DataFrame) = {
+
+    val getUserColTemp = DatasetExtensions.findUnusedColumnName(getUserCol)(dataset.columns.toSet)
+    val getUserColOrg = DatasetExtensions.findUnusedColumnName(getUserCol)(dataset.columns.toSet)
+    val getItemColTemp = DatasetExtensions.findUnusedColumnName(getItemCol)(dataset.columns.toSet)
+    val getItemColOrg = DatasetExtensions.findUnusedColumnName(getItemCol)(dataset.columns.toSet)
+
     val customerIndex = new StringIndexer()
       .setInputCol(getUserCol)
-      .setOutputCol(getUserCol + "temp")
+      .setOutputCol(getUserColTemp)
 
     val itemIndex = new StringIndexer()
       .setInputCol(getItemCol)
-      .setOutputCol(getItemCol + "temp")
+      .setOutputCol(getItemColTemp)
 
-    val pipeline = new Pipeline()
+    val pipelineModel = new Pipeline()
       .setStages(Array(customerIndex, itemIndex))
-
-    val pipelineModel = pipeline
       .fit(dataset)
 
+    //Index User and Item ID
     val indexedDataset = pipelineModel
       .transform(dataset)
-      .withColumnRenamed(getItemCol, getItemCol + "_org")
-      .withColumnRenamed(getUserCol, getUserCol + "_org")
-      .withColumnRenamed(getItemCol + "temp", getItemCol)
-      .withColumnRenamed(getUserCol + "temp", getUserCol)
+      .withColumnRenamed(getUserCol, getUserColOrg)
+      .withColumnRenamed(getItemCol, getItemColOrg)
+      .withColumnRenamed(getUserColTemp, getUserCol)
+      .withColumnRenamed(getItemColTemp, getItemCol)
+      .cache
 
-    val userAffinityMatrix = calculateUserItemAffinities(indexedDataset)
-    val itemAffinityMatrix = calculateItemItemAffinities(indexedDataset)
-
-    val recoverUserId = {
-      val userMap = pipelineModel
-        .stages(0).asInstanceOf[StringIndexerModel]
+    def recoverId(stageIndex: Int) = {
+      val map = pipelineModel
+        .stages(stageIndex).asInstanceOf[StringIndexerModel]
         .labels
         .zipWithIndex
         .map(t => (t._2, t._1))
         .toMap
 
-      val userMapBC = dataset.sparkSession.sparkContext.broadcast(userMap)
-      udf((userID: Integer) => userMapBC.value.getOrElse[String](userID, "-1"))
-    }
-    val recoverItemId = {
-      val itemMap = pipelineModel
-        .stages(1).asInstanceOf[StringIndexerModel]
-        .labels
-        .zipWithIndex
-        .map(t => (t._2, t._1))
-        .toMap
-
-      val itemMapBC = dataset.sparkSession.sparkContext.broadcast(itemMap)
-      udf((itemID: Integer) => itemMapBC.value.getOrElse[String](itemID, "-1"))
+      val mapBC = dataset.sparkSession.sparkContext.broadcast(map)
+      udf((iD: Integer) => mapBC.value.getOrElse[String](iD, "-1"))
     }
 
-    (userAffinityMatrix.withColumn(getUserCol + "_org", recoverUserId(col(getUserCol))),
-      itemAffinityMatrix.withColumn(getItemCol + "_org", recoverItemId(col(getItemCol))))
+    //Calculate user item affinity matricies
+    val userItemAffinityMatrix = calculateUserItemAffinities(indexedDataset)
+      .withColumn(getUserColOrg, recoverId(0)(col(getUserCol)))
+
+    //Calculate item item affinity matricies
+    val itemItemAffinityMatrix = calculateItemItemAffinities(indexedDataset)
+      .withColumn(getItemColOrg, recoverId(1)(col(getItemCol)))
+
+    (userItemAffinityMatrix , itemItemAffinityMatrix )
   }
 
   private[spark] def calculateUserItemAffinities(dataset: Dataset[_]): DataFrame = {
@@ -159,47 +158,44 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
     val itemCount = dataset.select(col(getItemCol).cast(IntegerType)).groupBy().max(getItemCol).collect()(0).getInt(0)
     val numItems = dataset.sparkSession.sparkContext.broadcast(itemCount)
 
-    val userAffinity = {
+    val userItemAffinity = {
       if (dataset.columns.contains(getTimeCol) && dataset.columns.contains(getRatingCol)) {
-        dataset.withColumn("affinity", blendWeights(timeDecay(col(getTimeCol)), col(getRatingCol)))
-          .select(getUserCol, getItemCol, "affinity")
+        dataset.withColumn(C.affinityCol, blendWeights(timeDecay(col(getTimeCol)), col(getRatingCol)))
       }
       else if (dataset.columns.contains(getTimeCol)) {
-        dataset.withColumn("affinity", timeDecay(col(getTimeCol))).select(getUserCol, getItemCol, "affinity")
+        dataset.withColumn(C.affinityCol, timeDecay(col(getTimeCol)))
       }
       else if (dataset.columns.contains(getRatingCol)) {
-        dataset.withColumn("affinity", col(getRatingCol)).select(getUserCol, getItemCol, "affinity")
+        dataset.withColumn(C.affinityCol, col(getRatingCol))
       } else {
         val fillOne = udf((_: String) => 1)
-        dataset.withColumn("affinity", fillOne(col(getUserCol))).select(getUserCol, getItemCol, "affinity")
+        dataset.withColumn(C.affinityCol, fillOne(col(getUserCol)))
       }
-    }
+    }.select(getUserCol, getItemCol, C.affinityCol)
 
-    val wrapColumn = udf((itemId: Double, rating: Double) => Array(itemId, rating))
-    val flattenItems = udf((r: Seq[Seq[Double]]) => {
-      val map = r.map(r => r(0).toInt -> r(1)).toMap
+    val columnsToArray = udf((itemId: Double, rating: Double) => Array(itemId, rating))
+
+    val seqToArray = udf((r: Seq[Seq[Double]]) => {
+      //Convert nested Set to Array
+      val map = r.map(r => r.head.toInt -> r(1)).toMap
       val array = (0 to numItems.value).map(i => map.getOrElse(i, 0.0).toFloat).toArray
       array
     })
 
-    userAffinity
-      .groupBy(getUserCol, getItemCol).agg(sum(col("affinity")) as "affinity")
-      .withColumn("itemUserAffinityPair", wrapColumn(col(getItemCol), col("affinity")))
-      .groupBy(getUserCol)
-      .agg(collect_list(col("itemUserAffinityPair")))
-      .withColumn("flatList", flattenItems(col("collect_list(itemUserAffinityPair)")))
+    userItemAffinity
+      .groupBy(getUserCol, getItemCol).agg(sum(col(C.affinityCol)) as C.affinityCol)
+      .withColumn("itemUserAffinityPair", columnsToArray(col(getItemCol), col(C.affinityCol)))
+      .groupBy(getUserCol).agg(collect_list(col("itemUserAffinityPair")))
+      .withColumn("flatList", seqToArray(col("collect_list(itemUserAffinityPair)")))
       .select(col(getUserCol).cast(IntegerType), col("flatList"))
   }
 
   private[spark] def calculateItemItemAffinities(dataset: Dataset[_]): DataFrame = {
+    //Calculate Item Item Affinity Weights for all warm items
+    val warmItemItemWeights = weightWarmItems(dataset).cache
 
-    //Calculate Item Affinity Weights for all warm items
-    val warmItemWeights = weightWarmItems(dataset).cache
-
-    //Use Optional Item Features to add Item Affinity Weights to cold items
-    val warmAndColdItemWeights = get(itemFeatures).map(weightColdItems(_, warmItemWeights))
-
-    warmAndColdItemWeights.getOrElse(warmItemWeights)
+    //Use Warm Item Item Weights to learn Cold Items if Item Features were provided
+    optionalWeightColdItems(warmItemItemWeights)
   }
 
   private[spark] def weightWarmItems(dataset: Dataset[_]): DataFrame = {
@@ -282,78 +278,92 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
       .select(col(getItemCol).cast(IntegerType), col(getUserCol).cast(IntegerType))
       .groupBy(getItemCol)
       .agg(collect_list(getUserCol) as "collect_list")
-      .withColumn(Constants.featuresCol, makeDenseFeatureVectors(col("collect_list")))
-      .select(col(getItemCol).cast(IntegerType), col(Constants.featuresCol))
-      .withColumn("jaccardList", calculateFeature(col(getItemCol), col(Constants.featuresCol)))
+      .withColumn(C.featuresCol, makeDenseFeatureVectors(col("collect_list")))
+      .select(col(getItemCol).cast(IntegerType), col(C.featuresCol))
+      .withColumn(jaccardList, calculateFeature(col(getItemCol), col(C.featuresCol)))
       .select(
         col(getItemCol).cast(IntegerType),
-        col("jaccardList")
+        col(jaccardList)
       )
 
   }
 
-  private[spark] def weightColdItems(itemFeaturesDF: Dataset[_], jaccard: DataFrame): DataFrame = {
+  private[spark] def optionalWeightColdItems(warmItemItemWeights: DataFrame): DataFrame = {
+    get(itemFeatures)
+      .map(weightColdItems(_, warmItemItemWeights))
+      .getOrElse(warmItemItemWeights)
+  }
+
+  private[spark] def weightColdItems(itemFeaturesDF: Dataset[_], warmItemItemWeights: DataFrame): DataFrame = {
+
     val sc = itemFeaturesDF.sparkSession
 
     val itemFeatureVectors = itemFeaturesDF.select(
       col(getItemCol).cast(LongType),
-      col(Constants.tagId).cast(LongType),
-      col(Constants.relevance)
+      col(C.tagId).cast(LongType),
+      col(C.relevance)
     )
       .rdd.map(r => MatrixEntry(r.getLong(0), r.getLong(1), 1.0))
 
     val itemFeatureMatrix = new CoordinateMatrix(itemFeatureVectors)
       .toIndexedRowMatrix()
-      .rows.map(index => (index.index.toInt, index.vector))
+      .rows
+      .map(index => (index.index.toInt, index.vector))
 
     val itemByItemFeatures =
       itemFeatureMatrix.cartesian(itemFeatureMatrix)
-        .map(row => {
-          val vec1: linalg.Vector = row._1._2
-          val vec2 = row._2._2
+        .map{case ((item_id_i, item_i_vector), (item_id_j, item_j_vector)) =>
           //consider if not equal 0
-          val productArray = (0 to vec1.argmax + 1).map(i => vec1.apply(i) * vec2.apply(i)).toArray
-          (row._1._1, row._2._1, new ml.linalg.DenseVector(productArray))
-        })
+          val productArray = (0 to item_i_vector.argmax + 1)
+            .map(i => item_i_vector.apply(i) * item_j_vector.apply(i))
+            .toArray
 
-    val selectScore = udf((itemID: Integer, wrappedList: Seq[Double]) => wrappedList(itemID))
+          (item_id_i, item_id_j, new ml.linalg.DenseVector(productArray))
+        }
 
-    val itempairsDF = sc.createDataFrame(itemByItemFeatures)
-      .toDF(getItemCol + "1", getItemCol + "2", Constants.featuresCol)
-      .join(jaccard, col(getItemCol) === col(getItemCol + "1"))
-      .withColumn("label", selectScore(col(getItemCol + "2"), col("jaccardList")))
-      .select(getItemCol + "1", getItemCol + "2", Constants.featuresCol, "label")
+    val selectScore = udf((itemID: Integer, itemAffinities: Seq[Double]) => itemAffinities(itemID))
 
-    val cold = itempairsDF.where(col("label") < 0)
+    val item_i = getItemCol + "_i"
+    val item_j = getItemCol + "_j"
 
-    val wrapColumn = udf((itemId: Double, rating: Double) => Array(itemId, rating))
+    val itemItemTrainingData = sc.createDataFrame(itemByItemFeatures)
+      .toDF(item_i, item_j, C.featuresCol)
+      .join(warmItemItemWeights, col(getItemCol) === col(item_i))
+      .withColumn(label, selectScore(col(item_j), col(jaccardList)))
+      .select(item_i, item_j, C.featuresCol, label)
 
-    val coldData = new LinearRegression()
+    val coldItems = itemItemTrainingData.where(col(label) < 0)
+
+    val columnsToArray = udf((itemId: Double, rating: Double) => Array(itemId, rating))
+
+    val coldItemItemWeights = new LinearRegression()
       .setMaxIter(10)
       .setRegParam(1.0)
       .setElasticNetParam(1.0)
-      .fit(itempairsDF)
-      .transform(cold)
-      .withColumn("wrappedPrediction", wrapColumn(col(getItemCol + "2"), col("prediction")))
-      .groupBy(getItemCol + "1")
-      .agg(collect_list(col("wrappedPrediction")))
-      .select(col(getItemCol + "1"), col("collect_list(wrappedPrediction)").as("wrappedPrediction"))
+      .fit(itemItemTrainingData)
+      .transform(coldItems)
+      .withColumn(wrappedPrediction, columnsToArray(col(item_j), col(prediction)))
+      .groupBy(item_i).agg(collect_list(col(wrappedPrediction)))
+      .select(col(item_i), col("collect_list(" + wrappedPrediction + ")").as(wrappedPrediction))
 
-    val mergeScore = udf((jaccard: mutable.WrappedArray[Float], cold: mutable.WrappedArray[mutable
-    .WrappedArray[Double]]) => {
-      cold.foreach(coldItem => {
-        jaccard.update(coldItem(0).toInt, coldItem(1).toFloat)
+    val mergeWarmAndColdItemAffinities = udf((itemAffinities: Seq[Float], coldItemAffinities: Seq[Seq[Double]]) => {
+      coldItemAffinities.foreach(coldItem => {
+        itemAffinities(coldItem.head.toInt) = coldItem(1).toFloat
       })
-      jaccard
+      itemAffinities
     })
 
-    val coldJaccard = jaccard
-      .join(coldData, col(getItemCol) === col(getItemCol + "1"))
-      .withColumn("output", mergeScore(col("jaccardList"), col("wrappedPrediction")))
-      .select(col("itemID"), col("output").as("jaccardList"))
-    coldJaccard
+    warmItemItemWeights
+      .join(coldItemItemWeights, col(getItemCol) === col(item_i))
+      .withColumn(output, mergeWarmAndColdItemAffinities(col(jaccardList), col(wrappedPrediction)))
+      .select(col(getItemCol), col(output).as(jaccardList))
   }
 
+  private val jaccardList = "jaccardList"
+  private val wrappedPrediction = "wrappedPrediction"
+  private val output = "output"
+  private val label = "label"
+  private val prediction = "prediction"
 }
 
 object SAR extends DefaultParamsReadable[SAR]
@@ -423,7 +433,7 @@ trait SARParams extends Wrappable with RecommendationParams {
       "Default: False")
 
   setDefault(timeDecayCoeff -> 30, activityTimeFormat -> "yyyy/MM/dd'T'h:mm:ss", supportThreshold -> 4,
-    ratingCol -> Constants.rating, userCol -> Constants.user, itemCol -> Constants.item, similarityFunction ->
+    ratingCol -> C.ratingCol, userCol -> C.userCol, itemCol -> C.itemCol, similarityFunction ->
       "jaccard", timeCol -> "time", startTimeFormat -> "EEE MMM dd HH:mm:ss Z yyyy", allowSeedItemsInRecommendations
       -> true, autoIndex -> false)
 }

@@ -4,7 +4,6 @@
 package com.microsoft.ml.spark
 
 import org.apache.spark.ml.feature.StringIndexer
-import org.apache.spark.ml.recommendation.ALS
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.sql.DataFrame
 
@@ -21,10 +20,9 @@ class SARSpec extends RankingTestBase with EstimatorFuzzing[SAR] {
     )
   }
 
-  test("Movie Lens 1mil - SAR") {
-    val ratings = movieLensSmall
-    val customerId = "UserId"
-    val itemId = "MovieId"
+  test("SAR") {
+    val customerId = userCol
+    val itemId = itemCol
 
     val customerIndex = new StringIndexer()
       .setInputCol(customerId)
@@ -67,8 +65,8 @@ class SARSpec extends RankingTestBase with EstimatorFuzzing[SAR] {
     metrics.foreach(f => println(f + ": " + evaluator.setMetricName(f).evaluate(output)))
   }
 
-  test("Movie Lens 1mil - ALS") {
-    val ratings = movieLensSmall
+  ignore("Movie Lens 1mil - SAR") {
+    val ratings = movieLensSmall.randomSplit(Array(0.000001))(0)
     val customerId = "UserId"
     val itemId = "MovieId"
 
@@ -86,10 +84,17 @@ class SARSpec extends RankingTestBase with EstimatorFuzzing[SAR] {
     val pipelineModel: PipelineModel = pipeline.fit(ratings)
     val transformedDf = pipelineModel.transform(ratings)
 
-    val algo = new ALS()
+    val threshold = 1
+    val similarityFunction = "jacccard"
+
+    val algo = new SAR()
       .setUserCol(customerIndex.getOutputCol)
       .setItemCol(itemsIndex.getOutputCol)
       .setRatingCol("Rating")
+      .setSupportThreshold(threshold)
+      .setSimilarityFunction(similarityFunction)
+      .setActivityTimeFormat("EEE MMM dd HH:mm:ss Z yyyy")
+      .setAutoIndex(false)
 
     val evaluator: RankingEvaluator = new RankingEvaluator()
       .setK(5)
@@ -104,7 +109,6 @@ class SARSpec extends RankingTestBase with EstimatorFuzzing[SAR] {
     val metrics = Array("ndcgAt", "fcp", "mrr")
 
     metrics.foreach(f => println(f + ": " + evaluator.setMetricName(f).evaluate(output)))
-
   }
 
   private[spark] lazy val movieLensSmall: DataFrame = session.read

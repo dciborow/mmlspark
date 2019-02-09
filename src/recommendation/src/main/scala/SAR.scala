@@ -280,12 +280,8 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
       .agg(collect_list(getUserCol) as "collect_list")
       .withColumn(C.featuresCol, makeDenseFeatureVectors(col("collect_list")))
       .select(col(getItemCol).cast(IntegerType), col(C.featuresCol))
-      .withColumn(jaccardList, calculateFeature(col(getItemCol), col(C.featuresCol)))
-      .select(
-        col(getItemCol).cast(IntegerType),
-        col(jaccardList)
-      )
-
+      .withColumn(C.itemAffinities, calculateFeature(col(getItemCol), col(C.featuresCol)))
+      .select(col(getItemCol).cast(IntegerType), col(C.itemAffinities))
   }
 
   private[spark] def optionalWeightColdItems(warmItemItemWeights: DataFrame): DataFrame = {
@@ -329,22 +325,23 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
     val itemItemTrainingData = sc.createDataFrame(itemByItemFeatures)
       .toDF(item_i, item_j, C.featuresCol)
       .join(warmItemItemWeights, col(getItemCol) === col(item_i))
-      .withColumn(label, selectScore(col(item_j), col(jaccardList)))
-      .select(item_i, item_j, C.featuresCol, label)
+      .withColumn(C.label, selectScore(col(item_j), col(C.itemAffinities)))
+      .select(item_i, item_j, C.featuresCol, C.label)
 
-    val coldItems = itemItemTrainingData.where(col(label) < 0)
+    val coldItems = itemItemTrainingData.where(col(C.label) < 0)
 
     val columnsToArray = udf((itemId: Double, rating: Double) => Array(itemId, rating))
 
+    val coldWeightArray = DatasetExtensions.findUnusedColumnName("coldWeightArray")(itemItemTrainingData.columns.toSet)
     val coldItemItemWeights = new LinearRegression()
       .setMaxIter(10)
       .setRegParam(1.0)
       .setElasticNetParam(1.0)
       .fit(itemItemTrainingData)
       .transform(coldItems)
-      .withColumn(wrappedPrediction, columnsToArray(col(item_j), col(prediction)))
-      .groupBy(item_i).agg(collect_list(col(wrappedPrediction)))
-      .select(col(item_i), col("collect_list(" + wrappedPrediction + ")").as(wrappedPrediction))
+      .withColumn(coldWeightArray, columnsToArray(col(item_j), col(C.prediction)))
+      .groupBy(item_i).agg(collect_list(col(coldWeightArray)))
+      .select(col(item_i), col("collect_list(" + coldWeightArray + ")").as(coldWeightArray))
 
     val mergeWarmAndColdItemAffinities = udf((itemAffinities: Seq[Float], coldItemAffinities: Seq[Seq[Double]]) => {
       coldItemAffinities.foreach(coldItem => {
@@ -353,17 +350,14 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
       itemAffinities
     })
 
+    val outputTemp = DatasetExtensions.findUnusedColumnName("output")(itemItemTrainingData.columns.toSet)
     warmItemItemWeights
       .join(coldItemItemWeights, col(getItemCol) === col(item_i))
-      .withColumn(output, mergeWarmAndColdItemAffinities(col(jaccardList), col(wrappedPrediction)))
-      .select(col(getItemCol), col(output).as(jaccardList))
+      .withColumn(outputTemp, mergeWarmAndColdItemAffinities(col(C.itemAffinities), col(coldWeightArray)))
+      .select(col(getItemCol), col(outputTemp).as(C.itemAffinities))
   }
 
-  private val jaccardList = "jaccardList"
-  private val wrappedPrediction = "wrappedPrediction"
-  private val output = "output"
-  private val label = "label"
-  private val prediction = "prediction"
+
 }
 
 object SAR extends DefaultParamsReadable[SAR]

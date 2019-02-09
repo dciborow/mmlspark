@@ -169,4 +169,7 @@ object Constants {
   val tagId = "tagId"
   val relevance = "relevance"
   val affinityCol = "affinity"
+  val prediction = "prediction"
+  val itemAffinities = "itemAffinities"
+  val label = "label"
 }

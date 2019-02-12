@@ -286,8 +286,7 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
 
     val itemFeatureVectors = itemFeaturesDF.select(
       col(getItemCol).cast(LongType),
-      col(C.tagId).cast(LongType),
-      col(C.relevance)
+      col(C.tagId).cast(LongType)
     )
       .rdd.map(r => MatrixEntry(r.getLong(0), r.getLong(1), 1.0))
 
@@ -345,7 +344,6 @@ class SAR(override val uid: String) extends Estimator[SARModel] with SARParams w
       .withColumn(outputTemp, mergeWarmAndColdItemAffinities(col(C.itemAffinities), col(coldWeightArray)))
       .select(col(getItemCol), col(outputTemp).as(C.itemAffinities))
   }
-
 }
 
 object SAR extends DefaultParamsReadable[SAR]

@@ -141,7 +141,7 @@ object Constants {
   val itemCol = "item"
   val ratingCol = "rating"
   val recommendations = "recommendations"
-  val featuresCol = "featuresCol"
+  val featuresCol = "features"
   val tagId = "tagId"
   val relevance = "relevance"
   val affinityCol = "affinity"

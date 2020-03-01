@@ -5,14 +5,14 @@ import os
 from setuptools import setup, find_packages
 
 setup(
-    name="dciborowMMLSpark",
-    version="0.0.30",
+    name="mmlspark",
+    version=os.environ["MML_PY_VERSION"],
     description="Microsoft ML for Spark",
     long_description="Microsoft ML for Apache Spark contains Microsoft's open source " +
                      "contributions to the Apache Spark ecosystem",
     license="MIT",
     # Project's main homepage.
-    url="https://github.com/dciborow/mmlspark",
+    url="https://github.com/Azure/mmlspark",
     # Author details
     author="Microsoft",
     author_email="mmlspark-support@microsoft.com",
@@ -20,10 +20,12 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
+        "Topic :: Software Development :: Datascience Tools",
         "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3"
     ],
-    
+    zip_safe=True,
      packages=['mmlspark',
                'mmlspark.recommendation',
                'pyspark.jars'],
@@ -32,12 +34,10 @@ setup(
             'pyspark.jars': 'deps/jars',
     },
     package_data={
-            'pyspark.jars': ['*.jar']},
-
+            'pyspark.jars': ['*.jar'],
+            "mmlspark": ["../LICENSE.txt", "../README.txt"]},
     install_requires=[
         "pyspark",
         "numpy"
-    ],
-
-    zip_safe=True
+    ]
 )

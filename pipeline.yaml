@@ -59,7 +59,7 @@ jobs:
         sbt publishBlob publishSigned publishDocs publishR
         sbt genBuildInfo
         echo "##vso[task.uploadsummary]$(pwd)/target/Build.md"
-        sbt release
+        sbt release                
       displayName: Publish Artifacts
       env:
         STORAGE_KEY: $(storage-key)
@@ -68,6 +68,18 @@ jobs:
         PGP-PRIVATE: $(pgp-private)
         PGP-PUBLIC: $(pgp-public)
         PGP-PW: $(pgp-pw)
+
+    - bash: |
+        source activate mmlspark
+        pip install twine
+
+        python -m twine upload target/scala-2.11/generated/package/python/*
+    
+      condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+      displayName: Publish to PyPi
+      env:
+        TWINE_USERNAME: "__token__"
+        TWINE_PASSWORD: $(pypi-pw)
 
     - bash: sbt publishBadges
       condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))

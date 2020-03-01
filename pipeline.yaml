@@ -59,7 +59,7 @@ jobs:
         sbt publishBlob publishSigned publishDocs publishR
         sbt genBuildInfo
         echo "##vso[task.uploadsummary]$(pwd)/target/Build.md"
-        sbt release                
+        sbt release
       displayName: Publish Artifacts
       env:
         STORAGE_KEY: $(storage-key)

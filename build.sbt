@@ -169,6 +169,25 @@ def pythonizeVersion(v: String): String = {
   }
 }
 
+val uploadPyPiTask = TaskKey[Unit]("uploadPyPiPackage", "upload python sdk to Pypi")
+
+uploadPyPiTask := {
+  val s = streams.value
+
+  packagePythonTask.value
+
+  Process(
+    activateCondaEnv ++
+      Seq(s"python", "-m", "pip", "install", "twine"),
+    pythonPackageDir) ! s.log
+
+  Process(
+    activateCondaEnv ++
+      Seq(s"python", "-m", "twine", "upload", "*", "-u", "__token__", "-p", s"${Secrets.PyPiPw}"),
+    pythonPackageDir) ! s.log
+}
+
+
 packagePythonTask := {
   val s = streams.value
   (run in IntegrationTest2).toTask("").value
@@ -176,6 +195,8 @@ packagePythonTask := {
   val destPyDir = join("target", "scala-2.11", "classes", "mmlspark")
   if (destPyDir.exists()) FileUtils.forceDelete(destPyDir)
   FileUtils.copyDirectory(join(pythonSrcDir.getAbsolutePath, "mmlspark"), destPyDir)
+
+  FileUtils.copyDirectory(join("target", "scala-2.11"), join(pythonSrcDir.toString,"deps","jars"))
 
   Process(
     activateCondaEnv ++

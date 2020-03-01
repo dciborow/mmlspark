@@ -22,7 +22,6 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
-        "Topic :: Software Development :: Datascience Tools",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3"
@@ -31,7 +30,7 @@ setup(
     zip_safe=True,
     include_package_data=True,
     package_dir={
-            'pyspark.jars': '/data/home/dciborow/mmlspark/target/scala-2.11/',
+            'pyspark.jars': 'deps/jars',
     },
     package_data={
             'pyspark.jars': ['*.jar'],

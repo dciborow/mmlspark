@@ -31,7 +31,7 @@ setup(
     zip_safe=True,
     include_package_data=True,
     package_dir={
-            'pyspark.jars': '../../../target/scala-2.11',
+            'pyspark.jars': '/data/home/dciborow/mmlspark/target/scala-2.11/',
     },
     package_data={
             'pyspark.jars': ['*.jar'],

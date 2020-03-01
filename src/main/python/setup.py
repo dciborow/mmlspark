@@ -11,6 +11,7 @@ setup(
     long_description="Microsoft ML for Apache Spark contains Microsoft's open source " +
                      "contributions to the Apache Spark ecosystem",
     license="MIT",
+    packages=find_packages() + ['pyspark.jars'],
     # Project's main homepage.
     url="https://github.com/Azure/mmlspark",
     # Author details
@@ -26,9 +27,6 @@ setup(
         "Programming Language :: Python :: 3"
     ],
     zip_safe=True,
-     packages=['mmlspark',
-               'mmlspark.recommendation',
-               'pyspark.jars'],
     include_package_data=True,
     package_dir={
             'pyspark.jars': 'deps/jars',

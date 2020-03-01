@@ -12,6 +12,7 @@ setup(
                      "contributions to the Apache Spark ecosystem",
     license="MIT",
     packages=find_packages() + ['pyspark.jars'],
+
     # Project's main homepage.
     url="https://github.com/Azure/mmlspark",
     # Author details
@@ -26,6 +27,7 @@ setup(
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 3"
     ],
+
     zip_safe=True,
     include_package_data=True,
     package_dir={

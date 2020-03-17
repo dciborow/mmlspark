@@ -9,20 +9,12 @@ from mmlspark.vw.VowpalWabbitRegressor import VowpalWabbitRegressor
 from mmlspark.vw.VowpalWabbitFeaturizer import VowpalWabbitFeaturizer
 
 from pyspark.sql.types import *
-from pyspark.sql import SparkSession
+from mmlsparktest.spark import *
 
-spark = SparkSession.builder \
-    .master("local[*]") \
-    .appName("_VW") \
-    .config("spark.jars.packages", "com.microsoft.ml.spark:mmlspark_2.11:" + os.environ["MML_VERSION"]) \
-    .config("spark.executor.heartbeatInterval", "60s") \
-    .getOrCreate()
-
-sc = spark.sparkContext
 
 class VowpalWabbitSpec(unittest.TestCase):
 
-    def save_model(self, estimator):
+    def get_data(self):
         # create sample data
         schema = StructType([StructField("label", DoubleType()),
                               StructField("text", StringType())])
@@ -33,10 +25,10 @@ class VowpalWabbitSpec(unittest.TestCase):
 
         # featurize data
         featurizer = VowpalWabbitFeaturizer(stringSplitInputCols=['text'])
-        featurized_data = featurizer.transform(data)
+        return featurizer.transform(data)
 
-        # train model
-        model = estimator.fit(featurized_data)
+    def save_model(self, estimator):
+        model = estimator.fit(self.get_data())
 
         # write model to file and validate it's there
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -51,6 +43,17 @@ class VowpalWabbitSpec(unittest.TestCase):
 
     def test_save_model_regression(self):
         self.save_model(VowpalWabbitRegressor())
+
+    def test_initial_model(self):
+        featurized_data = self.get_data()
+        estimator1 = VowpalWabbitClassifier()
+
+        model1 = estimator1.fit(featurized_data)
+
+        estimator2 = VowpalWabbitClassifier()
+        estimator2.setInitialModel(model1)
+
+        model2 = estimator2.fit(featurized_data)
 
 if __name__ == "__main__":
     result = unittest.main()

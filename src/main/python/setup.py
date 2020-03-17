@@ -29,6 +29,7 @@ setup(
 
     zip_safe=True,
     include_package_data=True,
+    data_files=[('lib', ['deps/jars/*.jar'])],
     package_dir={
             'pyspark.jars': 'deps/jars',
     },

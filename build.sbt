@@ -183,7 +183,7 @@ uploadPyPiTask := {
 
   Process(
     activateCondaEnv ++
-      Seq(s"python", "-m", "twine", "upload", "*", "-u", "__token__", "-p", s"${Secrets.PyPiPw}"),
+      Seq(s"python", "-m", "twine", "upload", "*", "-u", "__token__", "-p", s"${Secrets.pyPiPw}"),
     pythonPackageDir) ! s.log
 }
 

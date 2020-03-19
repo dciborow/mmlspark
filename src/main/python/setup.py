@@ -6,12 +6,12 @@ from setuptools import setup, find_packages
 
 setup(
     name="mmlspark",
-    version=os.environ["MML_PY_VERSION"],
+    version="0.0.11111111",
     description="Microsoft ML for Spark",
     long_description="Microsoft ML for Apache Spark contains Microsoft's open source " +
                      "contributions to the Apache Spark ecosystem",
     license="MIT",
-    packages=find_packages() + ['pyspark.jars'],
+    packages=find_packages() + ['mmlspark_pyspark.jars'],
 
     # Project's main homepage.
     url="https://github.com/Azure/mmlspark",
@@ -29,12 +29,11 @@ setup(
 
     zip_safe=True,
     include_package_data=True,
-    data_files=[('lib', ['deps/jars/*.jar'])],
     package_dir={
-            'pyspark.jars': 'deps/jars',
+            'mmlspark_pyspark.jars': 'deps/jars',
     },
     package_data={
-            'pyspark.jars': ['*.jar'],
+            'mmlspark_pyspark.jars': ['**.jar'],
             "mmlspark": ["../LICENSE.txt", "../README.txt"]},
     install_requires=[
         "pyspark",

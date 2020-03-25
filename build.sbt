@@ -169,9 +169,9 @@ def pythonizeVersion(v: String): String = {
   }
 }
 
-val uploadPyPiTask = TaskKey[Unit]("uploadPyPiPackage", "upload python sdk to Pypi")
+val publishPyPi = TaskKey[Unit]("publishPyPi", "upload python sdk to Pypi")
 
-uploadPyPiTask := {
+publishPyPi := {
   val s = streams.value
 
   packagePythonTask.value

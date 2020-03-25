@@ -199,16 +199,16 @@ VM](docs/gpu-setup.md).
 ### Python
 
 To try out MMLSpark on a Python (or Conda) installation you can get Spark
-installed via pip with `pip install pyspark`.  You can then use `pyspark` as in
+installed via pip with `pip install pyspark mmlspark`.  You can then use `pyspark` as in
 the above example, or from python:
 
 ```python
+import mmlspark
 import pyspark
 spark = pyspark.sql.SparkSession.builder.appName("MyApp") \
             .config("spark.jars.packages", "com.microsoft.ml.spark:mmlspark_2.11:1.0.0-rc1") \
             .config("spark.jars.repositories", "https://mmlspark.azureedge.net/maven") \
             .getOrCreate()
-import mmlspark
 ```
 
 ### SBT

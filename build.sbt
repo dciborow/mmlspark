@@ -200,7 +200,7 @@ packagePythonTask := {
 
   Process(
     activateCondaEnv ++
-      Seq(s"python", "setup.py", "bdist_wheel", "--universal", "-d", s"${pythonPackageDir.absolutePath}"),
+      Seq(s"python", "setup.py", "sdist", "--universal", "-d", s"${pythonPackageDir.absolutePath}"),
     pythonSrcDir,
     "MML_PY_VERSION" -> pythonizeVersion(version.value)) ! s.log
 }

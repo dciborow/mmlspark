@@ -59,7 +59,7 @@ jobs:
     - bash: |
         source activate mmlspark
         sbt packagePython
-        sbt publishBlob publishSigned publishDocs publishR
+        sbt publishBlob publishSigned publishDocs publishR uploadPyPiTask
         sbt genBuildInfo
         echo "##vso[task.uploadsummary]$(pwd)/target/Build.md"
         sbt release
@@ -71,6 +71,8 @@ jobs:
         PGP-PRIVATE: $(pgp-private)
         PGP-PUBLIC: $(pgp-public)
         PGP-PW: $(pgp-pw)
+        TWINE_USERNAME: "__token__"
+        TWINE_PASSWORD: $(pypi-pw)
 
     - bash: |
         source activate mmlspark

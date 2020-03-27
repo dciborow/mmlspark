@@ -164,6 +164,7 @@ publishR := {
 def pythonizeVersion(v: String): String = {
   if (v.contains("-")){
     v.split("-".head).head + ".dev1"
+    v
   }else{
     v
   }
@@ -200,7 +201,7 @@ packagePythonTask := {
 
   Process(
     activateCondaEnv ++
-      Seq(s"python", "setup.py", "sdist", "--universal", "-d", s"${pythonPackageDir.absolutePath}"),
+      Seq(s"python", "setup.py", "sdist", "-d", s"${pythonPackageDir.absolutePath}"),
     pythonSrcDir,
     "MML_PY_VERSION" -> pythonizeVersion(version.value)) ! s.log
 }
@@ -213,7 +214,7 @@ installPipPackageTask := {
   packagePythonTask.value
   Process(
     activateCondaEnv ++ Seq("pip", "install",
-      s"mmlspark-${pythonizeVersion(version.value)}-py2.py3-none-any.whl"),
+      s"mmlspark-${pythonizeVersion(version.value)}.tar.gz"),
     pythonPackageDir) ! s.log
 }
 

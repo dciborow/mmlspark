@@ -2,11 +2,12 @@
 # Licensed under the MIT License. See LICENSE in project root for information.
 
 import os
+import shutil 
 from setuptools import setup, find_packages
 
 setup(
     name="mmlspark",
-    version=os.environ["MML_PY_VERSION"],
+    version=os.environ.get("MML_PY_VERSION","0.0.0"),
     description="Microsoft ML for Spark",
     long_description="Microsoft ML for Apache Spark contains Microsoft's open source " +
                      "contributions to the Apache Spark ecosystem",
@@ -40,3 +41,5 @@ setup(
         "numpy"
     ]
 )
+spark_home = os.environ["SPARK_HOME"]
+shutil.copy("deps/jars/mmlspark_2.11-"+os.environ.get("MML_PY_VERSION")+".jar", spark_home + "/jars/")
